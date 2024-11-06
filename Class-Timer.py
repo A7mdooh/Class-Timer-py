@@ -189,6 +189,7 @@ def play_video():
     if not videos:
         return
 
+    # اختيار فيديو عشوائي لتشغيله
     video_file = os.path.join(video_folder, random.choice(videos))
 
     try:
