@@ -85,10 +85,10 @@ designer_name_label.pack()
 root.attributes('-fullscreen', True)
 
 # إنشاء واجهة المستخدم
-day_label = tk.Label(root, text="اختر يومًا من الأسبوع:")
+day_label = tk.Label(root, text="اختر يومًا من الأسبوع أو معرض:")
 day_label.pack(pady=0)
 
-days = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+days = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "معرض الصور", "معرض الفيديو", "إيقاف"]
 day_var = tk.StringVar()
 day_dropdown = ttk.Combobox(root, textvariable=day_var, values=days)
 day_dropdown.pack(pady=10)
@@ -112,10 +112,130 @@ event_tree.heading("teacher", text="المعلم")
 event_tree.heading("class_name", text="الصف")
 event_tree.pack(padx=20, pady=5, fill="both", expand=True)
 
-# إطار الفيديو ضمن الشجرة
-video_label = tk.Label(event_frame)
-video_label.pack(padx=20, pady=10, fill="both", expand=True)
+# نافذة جديدة لعرض الصور بكامل الشاشة
+photo_window = None
+current_photo_index = 0
+paused = False
 
+# عرض معرض الصور
+
+def show_photo_gallery():
+    global photo_window, current_photo_index, paused
+    photo_folder = "Photo gallery"
+    if not os.path.exists(photo_folder):
+        return
+
+    photos = [f for f in os.listdir(photo_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
+    if not photos:
+        return
+
+    current_photo_index = 0
+    paused = False
+
+    # إنشاء نافذة جديدة لعرض الصور
+    if photo_window is None or not photo_window.winfo_exists():
+        photo_window = tk.Toplevel(root)
+        photo_window.attributes('-fullscreen', True)
+        photo_window.title("معرض الصور")
+
+        # إضافة زر إنهاء في نافذة الصور
+        exit_button = tk.Button(photo_window, text="إنهاء العرض", font=("Cairo", 12), command=exit_photo_gallery)
+        exit_button.pack(side="top", pady=10)
+
+        # إضافة إطار لعرض الصورة
+        photo_label = tk.Label(photo_window)
+        photo_label.pack(fill="both", expand=True)
+
+        # عرض الصور بشكل متسلسل
+        def display_photo(photo_index):
+            if paused or not photo_window.winfo_exists():
+                return
+
+            photo_file = os.path.join(photo_folder, photos[photo_index])
+            image = Image.open(photo_file)
+            image = image.resize((photo_window.winfo_width(), photo_window.winfo_height()), Image.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+
+            photo_label.config(image=photo)
+            photo_label.image = photo
+            photo_window.after(5000, lambda: display_photo((photo_index + 1) % len(photos)))
+
+        display_photo(current_photo_index)
+
+# إنهاء معرض الصور والعودة إلى الشاشة الرئيسية
+
+def exit_photo_gallery():
+    global photo_window
+    if photo_window is not None and photo_window.winfo_exists():
+        photo_window.destroy()
+        photo_window = None
+    event_frame.pack(padx=20, pady=0, fill="both", expand=True)
+    day_var.set("إيقاف")  # تعيين القيمة إلى "إيقاف" لإيقاف الشجرة
+
+# نافذة جديدة لعرض الفيديوهات بكامل الشاشة
+video_window = None
+current_video_index = 0
+video_process = None
+
+# تعديل النهج المستخدم لعرض الفيديوهات باستخدام VLC لضمان تشغيل الصوت والفيديو بشكل كامل
+
+def show_video_gallery():
+    global video_window, current_video_index, video_process
+    video_folder = "Video gallery"
+    if not os.path.exists(video_folder):
+        print("لا يوجد مجلد الفيديوهات.")
+        return
+
+    videos = [f for f in os.listdir(video_folder) if f.endswith('.mp4')]
+    if not videos:
+        print("لا توجد فيديوهات بصيغة .mp4.")
+        return
+
+    current_video_index = 0
+
+    # إنشاء نافذة جديدة لعرض الفيديو
+    if video_window is None or not video_window.winfo_exists():
+        video_window = tk.Toplevel(root)
+        video_window.attributes('-fullscreen', True)
+        video_window.title("معرض الفيديو")
+
+        # إضافة زر إنهاء في نافذة الفيديو
+        exit_button = tk.Button(video_window, text="إنهاء العرض", font=("Cairo", 12), command=exit_video_gallery)
+        exit_button.pack(side="top", pady=10)
+
+        # تشغيل الفيديو بشكل متسلسل باستخدام VLC لضمان تشغيل الصوت والفيديو معًا
+        def play_video(video_index):
+            global video_process
+            if video_window is None or not video_window.winfo_exists():
+                return
+
+            video_file = os.path.join(video_folder, videos[video_index])
+            print(f"تشغيل الفيديو: {video_file}")
+
+            try:
+                # تشغيل الفيديو باستخدام VLC
+                video_process = subprocess.Popen(
+                    [r"C:\Program Files\VideoLAN\VLC\vlc.exe", "--fullscreen", "--play-and-exit", video_file]
+                )
+                # الانتقال إلى الفيديو التالي عند انتهاء الفيديو الحالي
+                video_duration = cv2.VideoCapture(video_file).get(cv2.CAP_PROP_FRAME_COUNT) / cv2.VideoCapture(video_file).get(cv2.CAP_PROP_FPS)
+                video_window.after(int(video_duration * 1000), lambda: play_video((video_index + 1) % len(videos)))
+            except FileNotFoundError:
+                print("لم يتم العثور على VLC لتشغيل الفيديو. يرجى التحقق من تثبيته.")
+
+        play_video(current_video_index)
+
+# إنهاء معرض الفيديو والعودة إلى الشاشة الرئيسية
+def exit_video_gallery():
+    global video_window, video_process
+    if video_window is not None and video_window.winfo_exists():
+        video_window.destroy()
+        video_window = None
+    if video_process is not None:
+        video_process.terminate()
+        video_process = None
+    event_frame.pack(padx=20, pady=0, fill="both", expand=True)
+    day_var.set("إيقاف")  # تعيين القيمة إلى "إيقاف" لإيقاف الشجرة
 
 # تحديث مظهر عنصر Label الذي يعرض اسم المدرسة
 def update_school_name_label():
@@ -127,10 +247,23 @@ def update_school_name_label():
     except FileNotFoundError:
         pass
 
-
 # قراءة ملف Excel وملء جدول الأحداث
 def load_events():
     try:
+        selected_day = day_var.get()
+        if selected_day == "معرض الصور":
+            show_photo_gallery()
+            return
+        elif selected_day == "معرض الفيديو":
+            show_video_gallery()
+            return
+        elif selected_day == "إيقاف":
+            event_tree.delete(*event_tree.get_children())
+            return
+
+        # إظهار الشجرة وإخفاء معرض الصور
+        event_frame.pack(padx=20, pady=0, fill="both", expand=True)
+
         df = pd.read_excel("events.xlsx")
         current_time = datetime.now().strftime("%H:%M:%S")
 
@@ -140,7 +273,7 @@ def load_events():
             start_time_str = row["start_time"].strftime("%H:%M:%S")
             end_time_str = row["end_time"].strftime("%H:%M:%S")
 
-            if row["day"] == day_var.get() and start_time_str <= current_time <= end_time_str:
+            if row["day"] == selected_day and start_time_str <= current_time <= end_time_str:
                 matching_events.append(
                     (row["event_name"], start_time_str, end_time_str, row["teacher"], row["class_name"]))
 
@@ -170,12 +303,10 @@ def load_events():
     except Exception as e:
         event_tree.insert("", "end", values=("خطأ", str(e), "", "", ""))
 
-
 video_process = None
 video_playing = False
 
-
-# تشغيل الفيديو عند عدم وجود أحداث
+# تشغيل الفيديو عند عدم وجود أحدث
 def play_video():
     global video_playing, video_process
     if video_playing:
@@ -195,12 +326,12 @@ def play_video():
     try:
         # تشغيل الفيديو باستخدام مشغل خارجي (مثل VLC) لضمان تشغيل الصوت
         video_process = subprocess.Popen(
-            [r"C:\Program Files\VideoLAN\VLC\vlc.exe", "--fullscreen", "--play-and-exit", video_file])
+            [r"C:\Program Files\VideoLAN\VLC\vlc.exe", "--fullscreen", "--play-and-exit", video_file]
+        )
         video_playing = True
     except FileNotFoundError:
         event_tree.insert("", "end",
                           values=("خطأ", "لم يتم العثور على VLC لتشغيل الفيديو. يرجى التحقق من تثبيته.", "", "", ""))
-
 
 # إغلاق الفيديو إذا كان يعمل
 def close_video_if_playing():
@@ -211,7 +342,6 @@ def close_video_if_playing():
             video_process = None
         video_playing = False
 
-
 # تحديث الساعة الرقمية بشكل دوري وتحميل الأحداث
 def update_time_and_load_events():
     current_time = time.strftime("%H:%M:%S")  # استخدام مكتبة time للتحسين في عرض الوقت
@@ -221,10 +351,8 @@ def update_time_and_load_events():
 
     root.after(1000, update_time_and_load_events)
 
-
 # تشغيل الملف الصوتي لبداية الحدث
 start_sound_played = False
-
 
 def play_start_sound():
     global start_sound_played
@@ -236,7 +364,6 @@ def play_start_sound():
         except Exception as e:
             print("خطأ في تشغيل ملف الصوت:", str(e))
 
-
 # تشغيل الملف الصوتي لنهاية الحدث مرة واحدة فقط
 def play_end_sound():
     global start_sound_played
@@ -247,7 +374,6 @@ def play_end_sound():
             start_sound_played = False
     except Exception as e:
         print("خطأ في تشغيل ملف الصوت:", str(e))
-
 
 # بدء تشغيل تحديث الوقت وتحميل الأحداث
 update_time_and_load_events()
